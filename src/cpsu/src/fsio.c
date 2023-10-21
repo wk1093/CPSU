@@ -14,13 +14,17 @@ suPath suPathNewDir(const char *path) {
     while (pathCopy[i] != '\0') {
         if (pathCopy[i] == '/' || pathCopy[i] == '\\') {
             pathCopy[i] = '\0';
-            suVectorAdd_str(p.dirs, pathCopy);
+            if (pathCopy[0] != '\0')
+                suVectorAdd_str(p.dirs, pathCopy);
             pathCopy = pathCopy + i + 1;
             i = 0;
         } else {
             i++;
         }
     }
+
+    if (pathCopy[0] != '\0')
+        suVectorAdd_str(p.dirs, pathCopy);
     return p;
 }
 
@@ -38,7 +42,8 @@ suPath suPathNewFile(const char *path) {
     while (pathCopy[i] != '\0') {
         if (pathCopy[i] == '/' || pathCopy[i] == '\\') {
             pathCopy[i] = '\0';
-            suVectorAdd_str(p.dirs, pathCopy);
+            if (pathCopy[0] != '\0')
+                suVectorAdd_str(p.dirs, pathCopy);
             pathCopy = pathCopy + i + 1;
             i = 0;
         } else {
@@ -47,6 +52,10 @@ suPath suPathNewFile(const char *path) {
     }
 
     p.filename = pathCopy;
+    if (p.filename[0] == '\0') {
+        p.filename = NULL;
+        printf("WARNING: suPathNewFile: path is a directory, not a file\n");
+    }
 
     return p;
 }
@@ -56,7 +65,8 @@ const char* suPathToString(suPath p) {
     for (size_t i = 0; i < p.dirs->size; i++) {
         len += strlen(suVectorGet_str(p.dirs, i)) + 1;
     }
-    len += strlen(p.filename) + 1;
+    if (p.filename != NULL)
+        len += strlen(p.filename) + 1;
 
     char* path = malloc(len);
     path[0] = '\0';
@@ -79,7 +89,6 @@ suPathQueryResult suPathStringQuery(const char *path) {
     if (attr == INVALID_FILE_ATTRIBUTES) {
         return sfs;
     }
-    sfs.success = suTrue;
     sfs.exists = suTrue;
     sfs.isDir = attr & FILE_ATTRIBUTE_DIRECTORY;
     sfs.isFile = attr & FILE_ATTRIBUTE_NORMAL;
@@ -119,10 +128,6 @@ const char* suPathStringGetBasename(const char *path) {
     if (path[len - 1] == '/' || path[len - 1] == '\\') {
         return NULL;
     }
-    suPathQueryResult sfs = suPathStringQuery(path);
-    if (!sfs.success || !sfs.exists || sfs.isDir) {
-        return NULL;
-    }
     suPath p = suPathNewFile(path);
     return p.filename;
 }
@@ -134,6 +139,88 @@ const char* suPathGetBasename(suPath path) {
     return NULL;
 }
 
+const char* suPathStringGetExtension(const char* path) {
+    if (path == NULL) {
+        return NULL;
+    }
+    const char* basename = suPathStringGetBasename(path);
+    if (basename == NULL) {
+        return NULL;
+    }
+    // asd.test.txt -> txt not test.txt
+    const char* ext = strrchr(basename, '.');
+    if (ext == NULL) {
+        return NULL;
+    }
+    return ext + 1;
+}
+
+const char* suPathGetExtension(suPath p) {
+    if (p.filename == NULL) {
+        return NULL;
+    }
+    return suPathStringGetExtension(p.filename);
+}
+
+
+suVector_u8* suPathStringReadFileBytes(const char* path) {
+    suPathQueryResult sfs = suPathStringQuery(path);
+    if (!sfs.exists || sfs.isDir) {
+        return NULL;
+    }
+    FILE* f = fopen(path, "rb");
+    if (f == NULL) {
+        return NULL;
+    }
+    fseek(f, 0, SEEK_END);
+    size_t len = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    suVector_u8* data = suVectorNew_u8();
+    suVectorResize_u8(data, len);
+    fread(data->data, 1, len, f);
+    fclose(f);
+    return data;
+}
+
+suVector_u8* suPathReadFileBytes(suPath p) {
+    if (p.filename == NULL) {
+        printf("WARNING: suPathReadFileBytes: path is a directory, not a file\n");
+        return NULL;
+    }
+    const char* pathStr = suPathToString(p);
+    return suPathStringReadFileBytes(pathStr);
+}
+
+const char* suPathStringReadFileText(const char* path) {
+    if (path == NULL) {
+        return NULL;
+    }
+    suPathQueryResult sfs = suPathStringQuery(path);
+    if (!sfs.exists || sfs.isDir) {
+        return NULL;
+    }
+    FILE* f = fopen(path, "rb");
+    if (f == NULL) {
+        return NULL;
+    }
+    fseek(f, 0, SEEK_END);
+    size_t len = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    char* data = malloc(len + 1);
+    fread(data, 1, len, f);
+    data[len] = '\0';
+    fclose(f);
+    return data;
+}
+
+const char* suPathReadFileText(suPath p) {
+    if (p.filename == NULL) {
+        printf("WARNING: suPathReadFileText: path is a directory, not a file\n");
+        return NULL;
+    }
+    const char* pathStr = suPathToString(p);
+    return suPathStringReadFileText(pathStr);
+}
 
 
 

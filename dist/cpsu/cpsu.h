@@ -657,7 +657,8 @@ suPath suPathNewDir(const char *path) {
     while (pathCopy[i] != '\0') {
         if (pathCopy[i] == '/' || pathCopy[i] == '\\') {
             pathCopy[i] = '\0';
-            suVectorAdd_str(p.dirs, pathCopy);
+            if (pathCopy[0] != '\0')
+                suVectorAdd_str(p.dirs, pathCopy);
             pathCopy = pathCopy + i + 1;
             i = 0;
         } else {
