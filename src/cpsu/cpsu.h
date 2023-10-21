@@ -2,16 +2,18 @@
 #ifndef SRC_CPSU_CPSU_H
 #define SRC_CPSU_CPSU_H
 
-#include "_cpsu_include.h"
+#include "stuff/_cpsu_include.h"
 
-#include "vector.h"
+#include "src/vector.h"
+#include "src/compiler.h"
 
 #ifdef CPSU_IMPLEMENTATION
 
-#include "vector.c"
+#include "src/vector.c"
+#include "src/compiler.c"
 
 #endif //CPSU_IMPLEMENTATION
 
-#include "_cpsu_end.h"
+#include "stuff/_cpsu_end.h"
 
 #endif //SRC_CPSU_CPSU_H

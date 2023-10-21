@@ -4,8 +4,9 @@
 #include <cpsu/cpsu.h>
 
 int main() {
-    suVector_i8 *vec = suVectorNew_i8();
-    suVectorAdd_i8(vec, 5);
-
-    suVectorFree_i8(vec);
+    suCompiler compiler = suCompilerNew(suFalse, SU_COMPILER_PREFERENCE_GNUC_LLVM_MSVC);
+    suCompilerSetOutput(&compiler, "main.o");
+    suCompilerAddInput(&compiler, "main.c");
+    const char* comand = suCompilerGetCommand(&compiler);
+    printf("%s\n", comand);
 }
