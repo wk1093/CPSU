@@ -223,5 +223,15 @@ const char* suCompilerGetCommand(suCompiler* compiler) {
     return strdup(command);
 }
 
+uint8_t suCompilerRun(suCompiler* compiler, suBool printCommand) {
+    const char* command = suCompilerGetCommand(compiler);
+    if (printCommand) {
+        printf("%s\n", command);
+    }
+    uint8_t ret = system(command);
+    free((void*)command);
+    return ret;
+}
+
 
 END_CPSU_CODE()

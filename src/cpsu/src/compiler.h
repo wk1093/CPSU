@@ -331,6 +331,13 @@ void suCompilerAddInput(suCompiler* compiler, const char* input);
  */
 const char* suCompilerGetCommand(suCompiler* compiler);
 
+/**
+ * @brief Runs the compiler
+ * @param compiler The compiler to run
+ * @return The exit code of the compiler
+ */
+uint8_t suCompilerRun(suCompiler* compiler, suBool printCommand);
+
 END_CPSU_CODE()
 
 #endif //SRC_CPSU_SRC_COMPILER_H

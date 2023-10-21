@@ -8,6 +8,20 @@
 #include <string.h>
 #include <stdio.h>
 
+// mostly filesystem headers
+#ifdef _WIN32
+#include <windows.h>
+#include <direct.h>
+#include <io.h>
+#define SU_PLATFORM_WINDOWS
+#else
+#include <unistd.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <dirent.h>
+#define SU_PLATFORM_UNIX
+#endif
+
 #ifndef __bool_true_false_are_defined
 // If for some reason bool is not defined, define it.
 typedef enum suBool {

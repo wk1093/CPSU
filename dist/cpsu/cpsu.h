@@ -11,6 +11,20 @@
 #include <string.h>
 #include <stdio.h>
 
+// mostly filesystem headers
+#ifdef _WIN32
+#include <windows.h>
+#include <direct.h>
+#include <io.h>
+#define SU_PLATFORM_WINDOWS
+#else
+#include <unistd.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <dirent.h>
+#define SU_PLATFORM_UNIX
+#endif
+
 #ifndef __bool_true_false_are_defined
 // If for some reason bool is not defined, define it.
 typedef enum suBool {
@@ -176,6 +190,90 @@ END_CPSU_CODE()
 
 #endif //SRC_CPSU_VECTOR_H
 /**** ended inlining src/vector.h ****/
+/**** start inlining src/fsio.h ****/
+#ifndef SRC_CPSU_SRC_FSIO_H
+#define SRC_CPSU_SRC_FSIO_H
+
+/**** skipping file: ../stuff/_cpsu_include.h ****/
+/**** skipping file: vector.h ****/
+
+BEGIN_CPSU_CODE()
+
+typedef struct {
+    suBool success; // should be checked before using other fields
+    suBool exists;
+    suBool isDir;
+    suBool isFile;
+    suBool isLink;
+    suBool isReadable;
+    suBool isWritable;
+    suBool isHidden;
+} suPathQueryResult;
+
+typedef struct {
+    suVector_str *dirs; // vector of strings
+    char *filename;
+} suPath;
+
+
+/**
+ * @brief Create a new path object from a string.
+ * This path represents a directory.
+ * @param path The path string.
+ * @return The path object.
+ */
+suPath suPathNewDir(const char *path);
+
+/**
+ * @brief Create a new path object from a string.
+ * This path represents a file.
+ * @param path The path string.
+ * @return The path object.
+ */
+suPath suPathNewFile(const char *path); // forces the last part of the path to be a file
+
+/**
+ * @brief Create a new path object from a string.
+ * @param p The path object.
+ * @return The path string.
+ */
+const char* suPathToString(suPath p);
+
+/**
+ * @brief Query the status of a given path.
+ * @param path The path to query.
+ * @return The query result.
+ */
+suPathQueryResult suPathStringQuery(const char *path);
+
+/**
+ * @brief Query the status of a given path.
+ * @param path The path to query.
+ * @return The query result.
+ */
+ suPathQueryResult suPathQuery(suPath path);
+
+/**
+ * @brief Get the basename of a path.
+ * @param path The path to get the basename of.
+ * @return The basename of the path. This is a pointer to the basename in the given path, no new memory is allocated.
+ * If the path is a directory, the basename is nothing.
+ */
+const char* suPathStringGetBasename(const char *path);
+
+/**
+ * @brief Get the basename of a path.
+ * @param path The path to get the basename of.
+ * @return The basename of the path. This is a pointer to the basename in the given path, no new memory is allocated.
+ * If the path is a directory, the basename is nothing.
+ */
+ const char* suPathGetBasename(suPath path);
+
+
+END_CPSU_CODE()
+
+#endif //SRC_CPSU_SRC_FSIO_H
+/**** ended inlining src/fsio.h ****/
 /**** start inlining src/compiler.h ****/
 #ifndef SRC_CPSU_SRC_COMPILER_H
 #define SRC_CPSU_SRC_COMPILER_H
@@ -509,6 +607,13 @@ void suCompilerAddInput(suCompiler* compiler, const char* input);
  */
 const char* suCompilerGetCommand(suCompiler* compiler);
 
+/**
+ * @brief Runs the compiler
+ * @param compiler The compiler to run
+ * @return The exit code of the compiler
+ */
+uint8_t suCompilerRun(suCompiler* compiler, suBool printCommand);
+
 END_CPSU_CODE()
 
 #endif //SRC_CPSU_SRC_COMPILER_H
@@ -535,6 +640,156 @@ ___suVectorDefine(char*, str)
 
 END_CPSU_CODE()
 /**** ended inlining src/vector.c ****/
+/**** start inlining src/fsio.c ****/
+/**** skipping file: fsio.h ****/
+
+BEGIN_CPSU_CODE()
+
+suPath suPathNewDir(const char *path) {
+    suPath p;
+    p.dirs = suVectorNew_str();
+    p.filename = NULL;
+
+    char* pathCopy = malloc(strlen(path) + 1);
+    strcpy(pathCopy, path);
+
+    size_t i = 0;
+    while (pathCopy[i] != '\0') {
+        if (pathCopy[i] == '/' || pathCopy[i] == '\\') {
+            pathCopy[i] = '\0';
+            suVectorAdd_str(p.dirs, pathCopy);
+            pathCopy = pathCopy + i + 1;
+            i = 0;
+        } else {
+            i++;
+        }
+    }
+    if (pathCopy[0] == '\0') {
+        return p;
+    }
+    // add the last part of the path
+    suVectorAdd_str(p.dirs, pathCopy);
+
+    return p;
+}
+
+suPath suPathNewFile(const char *path) {
+    // same as above, but last part isn't included in dirs, its in filename
+    suPath p;
+    p.dirs = suVectorNew_str();
+    p.filename = NULL;
+
+    char* pathCopy = malloc(strlen(path) + 1);
+    strcpy(pathCopy, path);
+
+    size_t i = 0;
+
+    while (pathCopy[i] != '\0') {
+        if (pathCopy[i] == '/' || pathCopy[i] == '\\') {
+            pathCopy[i] = '\0';
+            suVectorAdd_str(p.dirs, pathCopy);
+            pathCopy = pathCopy + i + 1;
+            i = 0;
+        } else {
+            i++;
+        }
+    }
+
+    p.filename = pathCopy;
+
+    return p;
+}
+
+const char* suPathToString(suPath p) {
+    size_t len = 0;
+    for (size_t i = 0; i < p.dirs->size; i++) {
+        len += strlen(suVectorGet_str(p.dirs, i)) + 1;
+    }
+    if (p.filename != NULL) {
+        len += strlen(p.filename) + 1;
+    }
+
+    char* path = malloc(len);
+    path[0] = '\0';
+
+    for (size_t i = 0; i < p.dirs->size; i++) {
+        strcat(path, suVectorGet_str(p.dirs, i));
+        strcat(path, "/");
+    }
+    if (p.filename != NULL) {
+        strcat(path, p.filename);
+    }
+
+    return path;
+}
+
+suPathQueryResult suPathStringQuery(const char *path) {
+    suPathQueryResult sfs = {suFalse};
+#ifdef SU_PLATFORM_WINDOWS
+    DWORD attr = GetFileAttributesA(path);
+    if (attr == INVALID_FILE_ATTRIBUTES) {
+        return sfs;
+    }
+    sfs.success = suTrue;
+    sfs.exists = suTrue;
+    sfs.isDir = attr & FILE_ATTRIBUTE_DIRECTORY;
+    sfs.isFile = attr & FILE_ATTRIBUTE_NORMAL;
+    sfs.isLink = attr & FILE_ATTRIBUTE_REPARSE_POINT;
+    sfs.isReadable = suTrue;
+    sfs.isWritable = !(attr & FILE_ATTRIBUTE_READONLY);
+    sfs.isHidden = attr & FILE_ATTRIBUTE_HIDDEN;
+#else
+    struct stat st;
+    if (stat(path, &st) != 0) {
+        return sfs;
+    }
+    sfs.success = suTrue;
+    sfs.exists = suTrue;
+    sfs.isDir = S_ISDIR(st.st_mode);
+    sfs.isFile = S_ISREG(st.st_mode);
+    sfs.isLink = S_ISLNK(st.st_mode);
+    sfs.isReadable = (st.st_mode & S_IRUSR) || (st.st_mode & S_IRGRP) || (st.st_mode & S_IROTH);
+    sfs.isWritable = (st.st_mode & S_IWUSR) || (st.st_mode & S_IWGRP) || (st.st_mode & S_IWOTH);
+    sfs.isHidden = suPathGetBasename(path)[0] == '.';
+#endif
+    return sfs;
+}
+
+suPathQueryResult suPathQuery(suPath path) {
+    const char* pathStr = suPathToString(path);
+    suPathQueryResult sfs = suPathStringQuery(pathStr);
+    return sfs;
+}
+
+const char* suPathStringGetBasename(const char *path) {
+    if (path == NULL) {
+        return NULL;
+    }
+    size_t len = strlen(path);
+    // this check skips some unnecessary queries (which aren't super expensive, but still)
+    if (path[len - 1] == '/' || path[len - 1] == '\\') {
+        return NULL;
+    }
+    suPathQueryResult sfs = suPathStringQuery(path);
+    if (!sfs.success || !sfs.exists || sfs.isDir) {
+        return NULL;
+    }
+    suPath p = suPathNewFile(path);
+    return p.filename;
+}
+
+const char* suPathGetBasename(suPath path) {
+    if (path.filename != NULL) {
+        return path.filename;
+    }
+    return NULL;
+}
+
+
+
+
+END_CPSU_CODE()
+/**** ended inlining src/fsio.c ****/
 /**** start inlining src/compiler.c ****/
 /**** skipping file: compiler.h ****/
 
@@ -759,6 +1014,16 @@ const char* suCompilerGetCommand(suCompiler* compiler) {
     }
 
     return strdup(command);
+}
+
+uint8_t suCompilerRun(suCompiler* compiler, suBool printCommand) {
+    const char* command = suCompilerGetCommand(compiler);
+    if (printCommand) {
+        printf("%s\n", command);
+    }
+    uint8_t ret = system(command);
+    free((void*)command);
+    return ret;
 }
 
 
